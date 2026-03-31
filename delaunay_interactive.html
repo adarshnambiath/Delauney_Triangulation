@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delaunay Playground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-a: #f5efe6;
+      --bg-b: #fdf8f0;
+      --card: rgba(255, 253, 247, 0.88);
+      --ink: #13212e;
+      --line: #173447;
+      --point: #e4572e;
+      --accent: #0e7490;
+      --muted: #5d6d79;
+      --grid: rgba(16, 48, 69, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 12% 0%, #ffe8c8 0%, transparent 58%),
+        radial-gradient(900px 550px at 88% 100%, #d7efe9 0%, transparent 57%),
+        linear-gradient(160deg, var(--bg-a), var(--bg-b));
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .app {
+      width: min(1040px, 96vw);
+      border: 1px solid rgba(19, 33, 46, 0.16);
+      border-radius: 18px;
+      overflow: hidden;
+      background: var(--card);
+      backdrop-filter: blur(8px);
+      box-shadow:
+        0 30px 70px rgba(13, 32, 45, 0.16),
+        0 2px 0 rgba(255, 255, 255, 0.7) inset;
+      animation: panel-in 520ms ease;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      padding: 14px;
+      background: linear-gradient(90deg, #fff7ea, #e7f6f2);
+      border-bottom: 1px solid rgba(19, 33, 46, 0.1);
+    }
+
+    h1 {
+      margin: 0;
+      margin-right: auto;
+      font-size: clamp(1rem, 2.1vw, 1.24rem);
+      letter-spacing: 0.01em;
+      font-weight: 800;
+    }
+
+    .pill {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.76rem;
+      color: #164e63;
+      border: 1px solid #7dd3fc;
+      background: #ecfeff;
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+
+    button {
+      border: 1px solid rgba(19, 33, 46, 0.24);
+      background: #ffffff;
+      color: var(--ink);
+      padding: 8px 13px;
+      border-radius: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 130ms ease, box-shadow 130ms ease, background 130ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 18px rgba(10, 30, 40, 0.14);
+      background: #f7fffd;
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.primary {
+      border-color: #0ea5a5;
+      background: linear-gradient(130deg, #c8fbef, #e7fff9);
+      color: #075985;
+    }
+
+    .status {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 11px 14px;
+      border-bottom: 1px solid rgba(19, 33, 46, 0.1);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.86rem;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.76);
+    }
+
+    .status strong {
+      color: #0f172a;
+    }
+
+    .canvas-wrap {
+      position: relative;
+    }
+
+    canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      cursor: crosshair;
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 26px 26px,
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 26px 26px,
+        #fffefb;
+    }
+
+    .hint {
+      padding: 10px 14px 14px;
+      color: #475569;
+      font-size: 0.9rem;
+    }
+
+    @keyframes panel-in {
+      from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.99);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @media (max-width: 660px) {
+      h1 {
+        width: 100%;
+      }
+
+      .status {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      button {
+        flex: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <h1>Delaunay Playground</h1>
+      <span class="pill">Bowyer-Watson</span>
+      <button id="randomBtn" class="primary">Random 20</button>
+      <button id="undoBtn">Undo</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+
+    <div class="status">
+      <div id="status"><strong>Ready.</strong> Click the canvas to add points.</div>
+      <div>Shortcuts: R = random, U = undo, C = clear</div>
+    </div>
+
+    <div class="canvas-wrap">
+      <canvas id="canvas" width="980" height="590" aria-label="Delaunay triangulation canvas"></canvas>
+    </div>
+    <div class="hint">Tip: build clusters and long chains to see how local updates alter the global triangulation.</div>
+  </main>
+
+  <script>
+    class Triangle {
+      constructor(p1, p2, p3) {
+        this.points = [p1, p2, p3];
+      }
+
+      edges() {
+        const p = this.points;
+        return [[p[0], p[1]], [p[1], p[2]], [p[2], p[0]]];
+      }
+
+      containsVertex(v) {
+        return this.points.some((p) => samePoint(p, v));
+      }
+    }
+
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const status = document.getElementById("status");
+    const randomBtn = document.getElementById("randomBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const undoBtn = document.getElementById("undoBtn");
+
+    const points = [];
+    let triangles = [];
+
+    function samePoint(a, b) {
+      return a[0] === b[0] && a[1] === b[1];
+    }
+
+    function edgeKey(a, b) {
+      const k1 = `${a[0]},${a[1]}`;
+      const k2 = `${b[0]},${b[1]}`;
+      return k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`;
+    }
+
+    function circumcircleContains(triangle, point) {
+      const [ax, ay] = triangle.points[0];
+      const [bx, by] = triangle.points[1];
+      const [cx, cy] = triangle.points[2];
+      const [dx, dy] = point;
+
+      const A = ax - dx;
+      const B = ay - dy;
+      const C = (ax - dx) ** 2 + (ay - dy) ** 2;
+
+      const D = bx - dx;
+      const E = by - dy;
+      const F = (bx - dx) ** 2 + (by - dy) ** 2;
+
+      const G = cx - dx;
+      const H = cy - dy;
+      const I = (cx - dx) ** 2 + (cy - dy) ** 2;
+
+      const det = A * (E * I - F * H) - B * (D * I - F * G) + C * (D * H - E * G);
+      const orient = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+
+      return orient > 0 ? det > 0 : det < 0;
+    }
+
+    function bowyerWatson(inputPoints) {
+      if (inputPoints.length < 3) {
+        return [];
+      }
+
+      const pts = inputPoints.map((p) => [p[0], p[1]]);
+      const minX = Math.min(...pts.map((p) => p[0]));
+      const minY = Math.min(...pts.map((p) => p[1]));
+      const maxX = Math.max(...pts.map((p) => p[0]));
+      const maxY = Math.max(...pts.map((p) => p[1]));
+
+      const dx = maxX - minX;
+      const dy = maxY - minY;
+      const delta = Math.max(dx, dy) * 10 || 100;
+
+      const p1 = [minX - delta, minY - delta];
+      const p2 = [minX + dx / 2, maxY + delta];
+      const p3 = [maxX + delta, minY - delta];
+
+      let triangulation = [new Triangle(p1, p2, p3)];
+
+      for (const point of pts) {
+        const badTriangles = triangulation.filter((t) => circumcircleContains(t, point));
+        const polygon = new Map();
+
+        for (const t of badTriangles) {
+          for (const [a, b] of t.edges()) {
+            const key = edgeKey(a, b);
+            const existing = polygon.get(key);
+            if (existing) {
+              existing.count += 1;
+            } else {
+              polygon.set(key, { a, b, count: 1 });
+            }
+          }
+        }
+
+        triangulation = triangulation.filter((t) => !badTriangles.includes(t));
+
+        for (const e of polygon.values()) {
+          if (e.count === 1) {
+            triangulation.push(new Triangle(e.a, e.b, point));
+          }
+        }
+      }
+
+      return triangulation.filter(
+        (t) => !t.containsVertex(p1) && !t.containsVertex(p2) && !t.containsVertex(p3)
+      );
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.lineWidth = 1.35;
+      ctx.strokeStyle = "rgba(22, 58, 77, 0.75)";
+      for (const t of triangles) {
+        ctx.beginPath();
+        ctx.moveTo(t.points[0][0], t.points[0][1]);
+        ctx.lineTo(t.points[1][0], t.points[1][1]);
+        ctx.lineTo(t.points[2][0], t.points[2][1]);
+        ctx.closePath();
+        ctx.stroke();
+      }
+
+      for (const [x, y] of points) {
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, 10);
+        glow.addColorStop(0, "rgba(228, 87, 46, 0.95)");
+        glow.addColorStop(1, "rgba(228, 87, 46, 0)");
+
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#e4572e";
+        ctx.beginPath();
+        ctx.arc(x, y, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      status.innerHTML = `<strong>Points: ${points.length}</strong> | Triangles: ${triangles.length}`;
+    }
+
+    function recompute() {
+      triangles = bowyerWatson(points);
+      draw();
+    }
+
+    function addPoint(x, y) {
+      points.push([x, y]);
+      recompute();
+    }
+
+    function randomizePoints(count = 20) {
+      points.length = 0;
+      for (let i = 0; i < count; i += 1) {
+        const x = 26 + Math.random() * (canvas.width - 52);
+        const y = 26 + Math.random() * (canvas.height - 52);
+        points.push([x, y]);
+      }
+      recompute();
+    }
+
+    canvas.addEventListener("click", (event) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (event.clientX - rect.left) * scaleX;
+      const y = (event.clientY - rect.top) * scaleY;
+      addPoint(x, y);
+    });
+
+    randomBtn.addEventListener("click", () => randomizePoints(20));
+
+    undoBtn.addEventListener("click", () => {
+      if (points.length > 0) {
+        points.pop();
+        recompute();
+      }
+    });
+
+    clearBtn.addEventListener("click", () => {
+      points.length = 0;
+      recompute();
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "r" || event.key === "R") {
+        randomizePoints(20);
+      }
+      if (event.key === "u" || event.key === "U") {
+        if (points.length > 0) {
+          points.pop();
+          recompute();
+        }
+      }
+      if (event.key === "c" || event.key === "C") {
+        points.length = 0;
+        recompute();
+      }
+    });
+
+    randomizePoints(20);
+  </script>
+</body>
+</html>

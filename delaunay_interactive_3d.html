@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delaunay 3D Terrain Playground</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg1: #0b1724;
+      --bg2: #10243a;
+      --card: rgba(5, 15, 26, 0.72);
+      --ink: #dbeafe;
+      --muted: #94a3b8;
+      --line: rgba(125, 211, 252, 0.55);
+      --accent: #34d399;
+      --point: #f97316;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Chakra Petch", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(1200px 680px at 15% 0%, #16345b 0%, transparent 60%),
+        radial-gradient(900px 600px at 90% 100%, #0f5132 0%, transparent 58%),
+        linear-gradient(160deg, var(--bg1), var(--bg2));
+      padding: 18px;
+      display: grid;
+      place-items: center;
+    }
+
+    .app {
+      width: min(1140px, 98vw);
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: var(--card);
+      backdrop-filter: blur(8px);
+      overflow: hidden;
+      box-shadow: 0 28px 65px rgba(2, 6, 23, 0.55);
+    }
+
+    .top {
+      padding: 12px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      background: linear-gradient(90deg, rgba(15, 23, 42, 0.9), rgba(30, 64, 175, 0.35));
+      border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+    }
+
+    h1 {
+      margin: 0;
+      margin-right: auto;
+      font-size: clamp(1rem, 2.1vw, 1.25rem);
+      letter-spacing: 0.02em;
+      font-weight: 700;
+    }
+
+    .tag {
+      border: 1px solid rgba(167, 243, 208, 0.7);
+      color: #a7f3d0;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.74rem;
+    }
+
+    button {
+      border: 1px solid rgba(219, 234, 254, 0.3);
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 7px 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      background: rgba(255, 255, 255, 0.16);
+    }
+
+    .panel {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      min-height: min(75vh, 720px);
+    }
+
+    .left {
+      border-right: 1px solid rgba(148, 163, 184, 0.2);
+      padding: 14px;
+      background: rgba(2, 6, 23, 0.34);
+    }
+
+    .left h2 {
+      margin: 0 0 8px;
+      font-size: 1rem;
+    }
+
+    .controls {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .status {
+      margin-top: 10px;
+      color: #a5b4fc;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    .viewport {
+      position: relative;
+      min-height: 500px;
+    }
+
+    #scene {
+      width: 100%;
+      height: 100%;
+      min-height: min(75vh, 720px);
+      display: block;
+      cursor: crosshair;
+    }
+
+    .overlay {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      font-size: 0.75rem;
+      padding: 7px 9px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      background: rgba(2, 6, 23, 0.45);
+      color: #cbd5e1;
+      pointer-events: none;
+    }
+
+    @media (max-width: 940px) {
+      .panel {
+        grid-template-columns: 1fr;
+      }
+
+      .left {
+        border-right: none;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+      }
+
+      #scene {
+        min-height: 520px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="top">
+      <h1>Delaunay Terrain in 3D</h1>
+      <span class="tag">Three.js + Bowyer-Watson (XZ)</span>
+      <button id="randomBtn">Random 24</button>
+      <button id="undoBtn">Undo</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+
+    <div class="panel">
+      <section class="left">
+        <h2>Placement System</h2>
+        <div class="controls">
+          <label>
+            <span>Auto terrain height</span>
+            <input id="autoHeightToggle" type="checkbox" checked />
+          </label>
+          <label>
+            <span>Height offset</span>
+            <div style="display:flex; gap:8px;">
+              <button id="heightDownBtn" type="button">-</button>
+              <button id="heightResetBtn" type="button">Reset</button>
+              <button id="heightUpBtn" type="button">+</button>
+            </div>
+          </label>
+          <div id="brushInfo" style="font-family:'IBM Plex Mono', monospace; color:#a7f3d0; font-size:0.82rem;">
+            Offset: 0 | Mode: Auto
+          </div>
+          <div id="boundsInfo" style="font-family:'IBM Plex Mono', monospace; color:#93c5fd; font-size:0.78rem;">
+            Bounds: x[-80, 80], z[-80, 80]
+          </div>
+        </div>
+        <div class="status" id="status">
+          Points: 0
+          <br />
+          Triangles: 0
+          <br />
+          Click to place. Hold Shift + drag to paint points.
+        </div>
+      </section>
+
+      <section class="viewport">
+        <canvas id="scene"></canvas>
+        <div class="overlay">Drag: orbit | Scroll: zoom | Click: place | Shift+drag: paint</div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    import * as THREE from "https://esm.sh/three@0.162.0";
+    import { OrbitControls } from "https://esm.sh/three@0.162.0/examples/jsm/controls/OrbitControls.js";
+
+    class Triangle {
+      constructor(p1, p2, p3) {
+        this.points = [p1, p2, p3];
+      }
+
+      edges() {
+        const p = this.points;
+        return [[p[0], p[1]], [p[1], p[2]], [p[2], p[0]]];
+      }
+
+      containsVertex(v) {
+        return this.points.some((p) => samePoint2D(p, v));
+      }
+    }
+
+    const canvas = document.getElementById("scene");
+    const status = document.getElementById("status");
+    const randomBtn = document.getElementById("randomBtn");
+    const undoBtn = document.getElementById("undoBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const autoHeightToggle = document.getElementById("autoHeightToggle");
+    const heightDownBtn = document.getElementById("heightDownBtn");
+    const heightResetBtn = document.getElementById("heightResetBtn");
+    const heightUpBtn = document.getElementById("heightUpBtn");
+    const brushInfo = document.getElementById("brushInfo");
+    const boundsInfo = document.getElementById("boundsInfo");
+
+    const WORLD_HALF = 140;
+    const WORLD_SIZE = WORLD_HALF * 2;
+    const RANDOM_MARGIN = 10;
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0b1724, 140, 260);
+
+    const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 1000);
+    camera.position.set(72, 76, 84);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 0, 0);
+
+    scene.add(new THREE.HemisphereLight(0xa5f3fc, 0x10243a, 0.85));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.72);
+    dir.position.set(35, 70, 20);
+    scene.add(dir);
+
+    const grid = new THREE.GridHelper(WORLD_SIZE, 40, 0x3b82f6, 0x334155);
+    grid.material.opacity = 0.24;
+    grid.material.transparent = true;
+    scene.add(grid);
+
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+
+    const boundary = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-WORLD_HALF, 0.02, -WORLD_HALF),
+        new THREE.Vector3(WORLD_HALF, 0.02, -WORLD_HALF),
+        new THREE.Vector3(WORLD_HALF, 0.02, WORLD_HALF),
+        new THREE.Vector3(-WORLD_HALF, 0.02, WORLD_HALF),
+      ]),
+      new THREE.LineBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.9 })
+    );
+    scene.add(boundary);
+
+    const pointsGroup = new THREE.Group();
+    const meshGroup = new THREE.Group();
+    scene.add(pointsGroup);
+    scene.add(meshGroup);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const dragState = { moved: false, downX: 0, downY: 0 };
+    const paintState = { active: false, lastX: 0, lastZ: 0, minDist: 4 };
+
+    const point3D = [];
+    let triangles = [];
+    let hoverHit = null;
+    let autoHeight = true;
+    let heightOffset = 0;
+
+    const hoverSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(1.2, 16, 16),
+      new THREE.MeshStandardMaterial({
+        color: 0x34d399,
+        emissive: 0x065f46,
+        metalness: 0.18,
+        roughness: 0.4,
+      })
+    );
+    hoverSphere.visible = false;
+    scene.add(hoverSphere);
+
+    const hoverLineGeom = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 1, 0),
+    ]);
+    const hoverLine = new THREE.Line(
+      hoverLineGeom,
+      new THREE.LineBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.58 })
+    );
+    hoverLine.visible = false;
+    scene.add(hoverLine);
+
+    function samePoint2D(a, b) {
+      return a[0] === b[0] && a[1] === b[1];
+    }
+
+    function edgeKey(a, b) {
+      const k1 = `${a[0]},${a[1]}`;
+      const k2 = `${b[0]},${b[1]}`;
+      return k1 < k2 ? `${k1}|${k2}` : `${k2}|${k1}`;
+    }
+
+    function terrainHeight(x, z) {
+      return (
+        10 * Math.sin(x * 0.075) * Math.cos(z * 0.065) +
+        6 * Math.sin((x + z) * 0.045)
+      );
+    }
+
+    function placementHeight(x, z) {
+      return (autoHeight ? terrainHeight(x, z) : 0) + heightOffset;
+    }
+
+    function clampToWorld(v) {
+      return Math.max(-WORLD_HALF, Math.min(WORLD_HALF, v));
+    }
+
+    function updateBrushInfo() {
+      brushInfo.textContent = `Offset: ${heightOffset} | Mode: ${autoHeight ? "Auto" : "Flat"}`;
+      boundsInfo.textContent = `Bounds: x[${-WORLD_HALF}, ${WORLD_HALF}], z[${-WORLD_HALF}, ${WORLD_HALF}]`;
+    }
+
+    function updateHoverVisual() {
+      if (!hoverHit) {
+        hoverSphere.visible = false;
+        hoverLine.visible = false;
+        return;
+      }
+
+      const y = placementHeight(hoverHit.x, hoverHit.z);
+      hoverSphere.position.set(hoverHit.x, y, hoverHit.z);
+      hoverSphere.visible = true;
+
+      const arr = hoverLine.geometry.attributes.position.array;
+      arr[0] = hoverHit.x;
+      arr[1] = 0;
+      arr[2] = hoverHit.z;
+      arr[3] = hoverHit.x;
+      arr[4] = y;
+      arr[5] = hoverHit.z;
+      hoverLine.geometry.attributes.position.needsUpdate = true;
+      hoverLine.visible = true;
+    }
+
+    function setHoverFromPointerEvent(event) {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster.intersectObject(ground)[0];
+      hoverHit = hit
+        ? { x: clampToWorld(hit.point.x), z: clampToWorld(hit.point.z) }
+        : null;
+      updateHoverVisual();
+      return hoverHit;
+    }
+
+    function circumcircleContains(triangle, point) {
+      const [ax, ay] = triangle.points[0];
+      const [bx, by] = triangle.points[1];
+      const [cx, cy] = triangle.points[2];
+      const [dx, dy] = point;
+
+      const A = ax - dx;
+      const B = ay - dy;
+      const C = (ax - dx) ** 2 + (ay - dy) ** 2;
+      const D = bx - dx;
+      const E = by - dy;
+      const F = (bx - dx) ** 2 + (by - dy) ** 2;
+      const G = cx - dx;
+      const H = cy - dy;
+      const I = (cx - dx) ** 2 + (cy - dy) ** 2;
+
+      const det = A * (E * I - F * H) - B * (D * I - F * G) + C * (D * H - E * G);
+      const orient = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+      return orient > 0 ? det > 0 : det < 0;
+    }
+
+    function bowyerWatson(inputPoints) {
+      if (inputPoints.length < 3) {
+        return [];
+      }
+
+      const pts = inputPoints.map((p) => [p[0], p[1]]);
+      const minX = Math.min(...pts.map((p) => p[0]));
+      const minY = Math.min(...pts.map((p) => p[1]));
+      const maxX = Math.max(...pts.map((p) => p[0]));
+      const maxY = Math.max(...pts.map((p) => p[1]));
+
+      const dx = maxX - minX;
+      const dy = maxY - minY;
+      const delta = Math.max(dx, dy) * 10 || 100;
+
+      const p1 = [minX - delta, minY - delta];
+      const p2 = [minX + dx / 2, maxY + delta];
+      const p3 = [maxX + delta, minY - delta];
+
+      let triangulation = [new Triangle(p1, p2, p3)];
+
+      for (const point of pts) {
+        const badTriangles = triangulation.filter((t) => circumcircleContains(t, point));
+        const polygon = new Map();
+
+        for (const t of badTriangles) {
+          for (const [a, b] of t.edges()) {
+            const key = edgeKey(a, b);
+            const existing = polygon.get(key);
+            if (existing) {
+              existing.count += 1;
+            } else {
+              polygon.set(key, { a, b, count: 1 });
+            }
+          }
+        }
+
+        triangulation = triangulation.filter((t) => !badTriangles.includes(t));
+
+        for (const e of polygon.values()) {
+          if (e.count === 1) {
+            triangulation.push(new Triangle(e.a, e.b, point));
+          }
+        }
+      }
+
+      return triangulation.filter(
+        (t) => !t.containsVertex(p1) && !t.containsVertex(p2) && !t.containsVertex(p3)
+      );
+    }
+
+    function getHeightMap() {
+      const map = new Map();
+      for (const p of point3D) {
+        map.set(`${p.x},${p.z}`, p.y);
+      }
+      return map;
+    }
+
+    function clearMeshes() {
+      while (meshGroup.children.length > 0) {
+        const m = meshGroup.children.pop();
+        m.geometry.dispose();
+        m.material.dispose();
+      }
+    }
+
+    function clearPointSpheres() {
+      while (pointsGroup.children.length > 0) {
+        const m = pointsGroup.children.pop();
+        m.geometry.dispose();
+        m.material.dispose();
+      }
+     }
+
+    function drawPoints() {
+      clearPointSpheres();
+
+      for (const p of point3D) {
+        const g = new THREE.SphereGeometry(1.05, 14, 14);
+        const m = new THREE.MeshStandardMaterial({
+          color: 0xf97316,
+          emissive: 0x7c2d12,
+          metalness: 0.28,
+          roughness: 0.45,
+        });
+        const s = new THREE.Mesh(g, m);
+        s.position.set(p.x, p.y, p.z);
+        pointsGroup.add(s);
+      }
+    }
+
+    function drawTriangles() {
+      clearMeshes();
+
+      if (triangles.length === 0) {
+        return;
+      }
+
+      const heightMap = getHeightMap();
+      const positions = [];
+
+      for (const tri of triangles) {
+        for (const p2 of tri.points) {
+          const y = heightMap.get(`${p2[0]},${p2[1]}`) ?? 0;
+          positions.push(p2[0], y, p2[1]);
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geo.computeVertexNormals();
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x22d3ee,
+        opacity: 0.45,
+        transparent: true,
+        side: THREE.DoubleSide,
+        metalness: 0.1,
+        roughness: 0.55,
+      });
+
+      const mesh = new THREE.Mesh(geo, mat);
+
+      const wire = new THREE.LineSegments(
+        new THREE.WireframeGeometry(geo),
+        new THREE.LineBasicMaterial({ color: 0x93c5fd, opacity: 0.75, transparent: true })
+      );
+
+      meshGroup.add(mesh);
+      meshGroup.add(wire);
+    }
+
+    function recompute() {
+      const projected = point3D.map((p) => [p.x, p.z]);
+      triangles = bowyerWatson(projected);
+      drawPoints();
+      drawTriangles();
+      status.innerHTML = `Points: ${point3D.length}<br />Triangles: ${triangles.length}<br />Bounds: x,z in [${-WORLD_HALF}, ${WORLD_HALF}] | Shift + drag to paint.`;
+      updateBrushInfo();
+      updateHoverVisual();
+    }
+
+    function addPoint(x, z, y) {
+      const key = `${x.toFixed(3)},${z.toFixed(3)}`;
+      const exists = point3D.some((p) => `${p.x.toFixed(3)},${p.z.toFixed(3)}` === key);
+      if (exists) {
+        return;
+      }
+      point3D.push({ x, y, z });
+      recompute();
+    }
+
+    function randomize(count = 24) {
+      point3D.length = 0;
+      for (let i = 0; i < count; i += 1) {
+        const x = (-WORLD_HALF + RANDOM_MARGIN) + Math.random() * (WORLD_SIZE - RANDOM_MARGIN * 2);
+        const z = (-WORLD_HALF + RANDOM_MARGIN) + Math.random() * (WORLD_SIZE - RANDOM_MARGIN * 2);
+        const y = placementHeight(x, z) + (-4 + Math.random() * 8);
+        point3D.push({ x, y, z });
+      }
+      recompute();
+    }
+
+    renderer.domElement.addEventListener("pointerdown", (event) => {
+      dragState.moved = false;
+      dragState.downX = event.clientX;
+      dragState.downY = event.clientY;
+
+      if (event.shiftKey) {
+        paintState.active = true;
+        controls.enabled = false;
+        const hit = setHoverFromPointerEvent(event);
+        if (hit) {
+          addPoint(hit.x, hit.z, placementHeight(hit.x, hit.z));
+          paintState.lastX = hit.x;
+          paintState.lastZ = hit.z;
+        }
+      }
+    });
+
+    renderer.domElement.addEventListener("pointermove", (event) => {
+      if (Math.abs(event.clientX - dragState.downX) > 4 || Math.abs(event.clientY - dragState.downY) > 4) {
+        dragState.moved = true;
+      }
+
+      const hit = setHoverFromPointerEvent(event);
+      if (paintState.active && hit) {
+        const dist = Math.hypot(hit.x - paintState.lastX, hit.z - paintState.lastZ);
+        if (dist >= paintState.minDist) {
+          addPoint(hit.x, hit.z, placementHeight(hit.x, hit.z));
+          paintState.lastX = hit.x;
+          paintState.lastZ = hit.z;
+        }
+      }
+    });
+
+    renderer.domElement.addEventListener("pointerup", (event) => {
+      if (paintState.active) {
+        paintState.active = false;
+        controls.enabled = true;
+        return;
+      }
+
+      // Do not add points when the pointer action was a camera drag.
+      if (dragState.moved) {
+        return;
+      }
+
+      const hit = setHoverFromPointerEvent(event);
+      if (!hit) {
+        return;
+      }
+
+      addPoint(hit.x, hit.z, placementHeight(hit.x, hit.z));
+    });
+
+    renderer.domElement.addEventListener("pointerleave", () => {
+      hoverHit = null;
+      updateHoverVisual();
+    });
+
+    randomBtn.addEventListener("click", () => randomize(24));
+
+    undoBtn.addEventListener("click", () => {
+      if (point3D.length > 0) {
+        point3D.pop();
+        recompute();
+      }
+    });
+
+    clearBtn.addEventListener("click", () => {
+      point3D.length = 0;
+      triangles = [];
+      clearPointSpheres();
+      clearMeshes();
+      status.innerHTML = `Points: 0<br />Triangles: 0<br />Bounds: x,z in [${-WORLD_HALF}, ${WORLD_HALF}] | Shift + drag to paint.`;
+      updateBrushInfo();
+    });
+
+    autoHeightToggle.addEventListener("change", () => {
+      autoHeight = autoHeightToggle.checked;
+      updateBrushInfo();
+      updateHoverVisual();
+    });
+
+    heightDownBtn.addEventListener("click", () => {
+      heightOffset = Math.max(-60, heightOffset - 1);
+      updateBrushInfo();
+      updateHoverVisual();
+    });
+
+    heightUpBtn.addEventListener("click", () => {
+      heightOffset = Math.min(60, heightOffset + 1);
+      updateBrushInfo();
+      updateHoverVisual();
+    });
+
+    heightResetBtn.addEventListener("click", () => {
+      heightOffset = 0;
+      updateBrushInfo();
+      updateHoverVisual();
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "r" || event.key === "R") {
+        randomize(24);
+      }
+      if (event.key === "u" || event.key === "U") {
+        if (point3D.length > 0) {
+          point3D.pop();
+          recompute();
+        }
+      }
+      if (event.key === "c" || event.key === "C") {
+        point3D.length = 0;
+        triangles = [];
+        clearPointSpheres();
+        clearMeshes();
+        status.innerHTML = `Points: 0<br />Triangles: 0<br />Bounds: x,z in [${-WORLD_HALF}, ${WORLD_HALF}] | Shift + drag to paint.`;
+      }
+      if (event.key === "[" || event.key === "-") {
+        heightOffset = Math.max(-60, heightOffset - 1);
+        updateBrushInfo();
+        updateHoverVisual();
+      }
+      if (event.key === "]" || event.key === "=") {
+        heightOffset = Math.min(60, heightOffset + 1);
+        updateBrushInfo();
+        updateHoverVisual();
+      }
+      if (event.key === "h" || event.key === "H") {
+        autoHeight = !autoHeight;
+        autoHeightToggle.checked = autoHeight;
+        updateBrushInfo();
+        updateHoverVisual();
+      }
+    });
+
+     function resize() {
+       const box = canvas.getBoundingClientRect();
+       const width = Math.max(1, box.width);
+       const height = Math.max(1, box.height);
+       renderer.setSize(width, height, false);
+       camera.aspect = width / height;
+       camera.updateProjectionMatrix();
+     }
+
+     window.addEventListener("resize", resize);
+     resize();
+    updateBrushInfo();
+    randomize(24);
+
+     function animate() {
+       controls.update();
+       renderer.render(scene, camera);
+       requestAnimationFrame(animate);
+     }
+
+     animate();
+   </script>
+ </body>
+ </html>
